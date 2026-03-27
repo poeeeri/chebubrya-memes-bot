@@ -37,8 +37,8 @@ class Settings:
             openai_rerank_model=os.getenv('OPENAI_RERANK_MODEL', 'openai/gpt-5-mini').strip(),
             chroma_dir=os.getenv('CHROMA_DIR', 'storage/chroma'),
             meme_collection=os.getenv('MEME_COLLECTION', 'memes'),
-            retrieval_top_k=os.getenv('OPENROUTER_SITE_URL', ''),
-            telegram_request_timeout_seconds=os.getenv('OPENROUTER_SITE_URL', '120.0'),
-            telegram_retry_delay_seconds=os.getenv('OPENROUTER_SITE_URL', '5.0'),
-            telegram_retry_delay_max_seconds=os.getenv('OPENROUTER_SITE_URL', '60.0'),
+            retrieval_top_k=int(os.getenv('RETRIEVAL_TOP_K', '5')),
+            telegram_request_timeout_seconds=float(os.getenv('OPENROUTER_SITE_URL', '120.0')),
+            telegram_retry_delay_seconds=float(os.getenv('OPENROUTER_SITE_URL', '5.0')),
+            telegram_retry_delay_max_seconds=float(os.getenv('OPENROUTER_SITE_URL', '60.0')),
         )
