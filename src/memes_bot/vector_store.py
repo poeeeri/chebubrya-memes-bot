@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import chromadb
 from chromadb.api.models.Collection import Collection
 from pathlib import Path
-from __future__ import annotations
 
 # постоянное подключение к векторной базе данных
 def get_collection(chroma_dir: Path, collection_name: str) -> Collection:

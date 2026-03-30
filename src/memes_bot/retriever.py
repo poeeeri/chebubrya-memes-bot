@@ -45,7 +45,7 @@ def pick_best_meme(query: str, settings: Settings) -> dict:
     choice = choose_best_meme(
         client=client,
         model=settings.openai_rerank_model,
-        user_query=query,
+        query=query,
         candidates=candidates,
     )
 

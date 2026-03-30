@@ -1,3 +1,14 @@
 /конспект.docx
 .env
 ~WRL0003.tmp
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.env
+data/
+storage/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store

@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 import pandas as pd
 from typing import Iterable
-from __future__ import annotations
+
 from .config import Settings
 from pathlib import Path
 from .vector_store import get_collection
@@ -56,7 +58,7 @@ def index_meme(
         settings: Settings
 ) -> int:
     dataset_path = dataset_path.resolve()
-    df = pd.read_csv(dataset_path)
+    df = pd.read_csv(dataset_path, encoding='cp1251', sep=';')
     records = load_memes_from_df(df, image_column=image_column, text_columns=text_columns)
     if not records:
         raise RuntimeError(
