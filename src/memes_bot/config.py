@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from pathlib import Path
 from dotenv import load_dotenv
 from dataclasses import dataclass
 import os
-from __future__ import annotations
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / '.env')
@@ -27,6 +29,11 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        chroma_dir_env = os.getenv('CHROMA_DIR', 'storage/chroma')
+        if isinstance(chroma_dir_env, str):
+            chroma_dir_path = ROOT_DIR / chroma_dir_env
+        else:
+            chroma_dir_path = chroma_dir_env
         return cls(
             openai_api_key=os.getenv('OPENAI_API_KEY'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN', ''),
@@ -35,10 +42,10 @@ class Settings:
             openrouter_site_name=os.getenv('OPENROUTER_SITE_NAME', '').strip(),
             openai_embedding_model=os.getenv('OPENAI_EMBEDDING_MODEL', 'openai/text-embedding-3-small').strip(),
             openai_rerank_model=os.getenv('OPENAI_RERANK_MODEL', 'openai/gpt-5-mini').strip(),
-            chroma_dir=os.getenv('CHROMA_DIR', 'storage/chroma'),
+            chroma_dir=chroma_dir_path,
             meme_collection=os.getenv('MEME_COLLECTION', 'memes'),
-            retrieval_top_k=int(os.getenv('RETRIEVAL_TOP_K', '5')),
-            telegram_request_timeout_seconds=float(os.getenv('OPENROUTER_SITE_URL', '120.0')),
-            telegram_retry_delay_seconds=float(os.getenv('OPENROUTER_SITE_URL', '5.0')),
-            telegram_retry_delay_max_seconds=float(os.getenv('OPENROUTER_SITE_URL', '60.0')),
+            retrieval_top_k=int(os.getenv('RETRIEVAL_TOP_K', 5)),
+            telegram_request_timeout_seconds=float(os.getenv('telegram_request_timeout_seconds', 120.0)),
+            telegram_retry_delay_seconds=float(os.getenv('telegram_retry_delay_seconds', 5.0)),
+            telegram_retry_delay_max_seconds=float(os.getenv('telegram_retry_delay_max_seconds', 60.0)),
         )
