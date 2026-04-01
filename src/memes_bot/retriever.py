@@ -4,7 +4,7 @@ from .vector_store import get_collection
 from .client import build_openai_client, embed_texts, choose_best_meme
 
 
-def retrieve_candidates(query: str, settings: Settings) -> list[dict]:
+def retrieve_candidates(query: str, settings: Settings, n_results: int) -> list[dict]:
     collection = get_collection(settings.chroma_dir, settings.meme_collection)
     client = build_openai_client(settings)
 # получаем эмюеддинг запроса пользователя
@@ -17,7 +17,7 @@ def retrieve_candidates(query: str, settings: Settings) -> list[dict]:
 # поиск эьмеддингов мемов в векторной бд
     result = collection.query(
         query_embeddings=[query_embed],
-        n_results=settings.retrieval_top_k
+        n_results=n_results or settings.retrieval_top_k
     )
 
     ids = result.get("ids", [[]])[0]

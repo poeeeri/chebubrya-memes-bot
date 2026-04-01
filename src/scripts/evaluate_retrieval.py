@@ -5,7 +5,6 @@ from memes_bot.config import Settings
 import pandas as pd
 from pathlib import Path
 from memes_bot.retriever import retrieve_candidates
-from memes_bot.retriever import find_rank
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,7 +20,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_dataframe(path: Path) -> pd.DataFrame:
     resolved_path = path.resolve()
-    return pd.read_csv(resolved_path)
+    return pd.read_csv(resolved_path, encoding='cp1251', sep=';')
 
 
 def extract_query_values(value: object) -> list[str]:
@@ -63,6 +62,7 @@ def find_rank(candidate_ids: list[str], target_id: str) -> int | None:
         if candidate_id == target_id:
             return index
     return None
+
 
 def main() -> None:
     args = parse_args()
