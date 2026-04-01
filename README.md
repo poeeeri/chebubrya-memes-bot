@@ -9,6 +9,7 @@ pip install -r requirements.txt
 python scripts\inspect_dataset.py --dataset DATASET_PATH
 
 <!-- индексация -->
+$env:PYTHONPATH = "C:\Users\Lenovo\Desktop\chebubrya-memes-bot\src"
 python scripts\index_memes.py `
   --dataset "c:\Users\Lenovo\Desktop\dataset\train\images\memes.csv.xlsx" `
   --image-column "meme_path" `
