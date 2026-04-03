@@ -26,6 +26,7 @@ class Settings:
     telegram_request_timeout_seconds: float = 120.0
     telegram_retry_delay_seconds: float = 5.0
     telegram_retry_delay_max_seconds: float = 60.0
+    local_reranker_model_path: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -48,4 +49,5 @@ class Settings:
             telegram_request_timeout_seconds=float(os.getenv('telegram_request_timeout_seconds', 120.0)),
             telegram_retry_delay_seconds=float(os.getenv('telegram_retry_delay_seconds', 5.0)),
             telegram_retry_delay_max_seconds=float(os.getenv('telegram_retry_delay_max_seconds', 60.0)),
+            local_reranker_model_path=os.getenv("LOCAL_RERANKER_MODEL_PATH", "").strip(),
         )

@@ -29,7 +29,6 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
             '\n'.join(
                 [
                     f'{idx}. id: {candidate['id']}',
-                    f'summary: {candidate['summary']}',
                     f'image_path: {candidate['image_path']}',
                     f'distance_score: {candidate.get('distance', 'n/a')}',
                 ],
@@ -45,7 +44,7 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
                 "role": "system",
                 "content": (
                     "ты выбираешь единственный наилучший мем для Telegram сообщения. "
-                    "верни только валидный JSON с ключами: meme_id, reason (кратко, одного предложения хватит)."
+                    "верни только валидный JSON с ключами: meme_id"
                 ),
             },
             {
@@ -67,7 +66,6 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
     except json.JSONDecodeError:
         return {
             "meme_id": candidates[0]["id"],
-            "reason": "модель вернула результат в формате, отличном от JSON",
             "raw_output": raw_text,
         }
     return parsed

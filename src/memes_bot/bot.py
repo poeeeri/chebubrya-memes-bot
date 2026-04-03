@@ -41,8 +41,7 @@ def create_dispatcher(settings: Settings) -> Dispatcher:
             match = pick_best_meme(cleaned_query, settings)
             image_path = Path(match["image_path"])
             photo = FSInputFile(image_path)
-            caption = f"Подобрал мем: {match['reason']}" if match.get("reason") else None
-            await message.reply_photo(photo=photo, caption=caption)
+            await message.reply_photo(photo=photo)
         except Exception:
             logging.exception("Failed to serve meme for query: %s", cleaned_query)
             await message.reply("Не смог подобрать мем")

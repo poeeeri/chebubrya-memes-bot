@@ -50,6 +50,13 @@ def load_memes_from_df(
     return records
 
 
+def _safe_str(value: object) -> str:
+    text = str(value).strip()
+    if text.lower() == 'nan':
+        return ''
+    return text
+
+
 # индексация мемов в векторной бд
 def index_meme(
         dataset_path: Path,
@@ -74,13 +81,17 @@ def index_meme(
     documents = []
     for record in records:
         resolved_image = _resolve_image_path(dataset_path.parent, record.image_path)
+        source_row = df.iloc[record.source_row]
         ids.append(record.meme_id)
         documents.append(record.summary)
         metadatas.append(
             {
                 "image_path": str(resolved_image),
-                "summary": record.summary,
                 "source_row": record.source_row,
+                "embedding_text": _safe_str(source_row.get("embedding_text", "")),
+                "semantic_description": _safe_str(source_row.get("semantic_description", "")),
+                "ocr_text": _safe_str(source_row.get("ocr_text", "")),
+                "user_messages": _safe_str(source_row.get("user_messages", ""))
             }
         )
 
