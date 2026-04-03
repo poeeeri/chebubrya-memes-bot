@@ -1,0 +1,15 @@
+services:
+  memes-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memes-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/src
+    volumes:
+      - /home/memes/memes-bot/storage/chroma:/app/storage/chroma
+      - /home/memes/dataset:/home/memes/dataset:ro
+      - /home/memes/memes-bot/models:/app/models

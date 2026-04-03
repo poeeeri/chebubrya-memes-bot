@@ -5,6 +5,7 @@ from memes_bot.config import Settings
 import pandas as pd
 from pathlib import Path
 from memes_bot.retriever import retrieve_candidates
+from memes_bot.reranker import rerank_candidates_with_local_reranker
 
 
 def parse_args() -> argparse.Namespace:
@@ -13,6 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--query-columns', required=True, nargs='+')
     parser.add_argument('--id-column', default='meme_id')
     parser.add_argument('--split', default='')
+    parser.add_argument('---retrieve-k', type=int, default=5)
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     parser.add_argument('--show-failure', type=int, default=20)
     return parser.parse_args()
@@ -84,8 +86,10 @@ def main() -> None:
 
     for item in queries:
         candidates = retrieve_candidates(item['query'], settings)
-        candidate_ids = [candidate['id'] for candidate in candidates]
-        rank = find_rank(candidate_ids, item['meme_id'])
+        reranked = rerank_candidates_with_local_reranker(item["query"], candidates, settings)
+        rerunked_ids = [candidate["id"] for candidate in reranked[:max_k]]
+        # candidate_ids = [candidate['id'] for candidate in candidates]
+        rank = find_rank(rerunked_ids, item['meme_id'])
 
         if rank is not None:
             rank_sum += 1.0 / rank
@@ -97,7 +101,7 @@ def main() -> None:
                 'query': item['query'],
                 'meme_id': item['meme_id'],
                 'source_column': item['source_column'],
-                'top_ids': candidate_ids
+                'top_ids': rerunked_ids
             })
     
     total = len(queries)
