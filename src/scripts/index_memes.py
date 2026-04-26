@@ -19,6 +19,10 @@ def parse_args() -> argparse.Namespace:
         required=True,
         nargs="+",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true"
+    )
     return parser.parse_args()
 
 
@@ -30,6 +34,7 @@ def main() -> None:
         image_column=args.image_column,
         text_columns=args.text_columns,
         settings=settings,
+        reset=args.reset,
     )
     print(f"indexed {indexed_count} memes.")
 

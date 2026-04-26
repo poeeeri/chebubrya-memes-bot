@@ -27,6 +27,8 @@ class Settings:
     telegram_retry_delay_seconds: float = 5.0
     telegram_retry_delay_max_seconds: float = 60.0
     local_reranker_model_path: str = ""
+    local_retrieval_model_path: str = ""
+    local_retrieval_use_e5_prefixes: bool = True
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,4 +52,8 @@ class Settings:
             telegram_retry_delay_seconds=float(os.getenv('telegram_retry_delay_seconds', 5.0)),
             telegram_retry_delay_max_seconds=float(os.getenv('telegram_retry_delay_max_seconds', 60.0)),
             local_reranker_model_path=os.getenv("LOCAL_RERANKER_MODEL_PATH", "").strip(),
+            local_retrieval_model_path=os.getenv("LOCAL_RETRIEVAL_MODEL_PATH", "").strip(),
+            local_retrieval_use_e5_prefixes=os.getenv(
+                "LOCAL_RETRIEVAL_USE_E5_PREFIXES", 
+                "true").strip().lower() in {"1", "true", "yes", "y"},
         )
