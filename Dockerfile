@@ -16,6 +16,6 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY src ./src
-COPY scripts ../src/scripts
+COPY src/scripts ./scripts
 
 CMD ["python", "-m", "memes_bot.main"]

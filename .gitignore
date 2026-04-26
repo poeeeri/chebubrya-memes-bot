@@ -12,3 +12,6 @@ storage/
 *.pyo
 *.pyd
 .DS_Store
+/finetuned_model
+/finetuned_retrieval_model
+LOCAL.md
