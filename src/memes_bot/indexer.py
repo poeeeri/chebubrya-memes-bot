@@ -6,8 +6,9 @@ from typing import Iterable
 
 from .config import Settings
 from pathlib import Path
-from .vector_store import get_collection
+from .vector_store import get_collection, reset_collection
 from .client import build_openai_client, embed_texts
+from .local_retrieval import embed_passages_with_local_model
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,8 @@ def index_meme(
         dataset_path: Path,
         image_column: str,
         text_columns: list[str],
-        settings: Settings
+        settings: Settings,
+        reset: bool = False,
 ) -> int:
     dataset_path = dataset_path.resolve()
     df = pd.read_csv(dataset_path, encoding='cp1251', sep=';')
@@ -72,9 +74,17 @@ def index_meme(
             "для индексации не найдено подходящих строк"
         )
     settings.chroma_dir.mkdir(parents=True, exist_ok=True)
-    collection = get_collection(settings.chroma_dir, settings.meme_collection)
-    client = build_openai_client(settings)
-    embeddings = embed_texts(client, settings.openai_embedding_model, [record.summary for record in records])
+    collection = (
+        reset_collection(settings.chroma_dir, settings.meme_collection)
+        if reset
+        else get_collection(settings.chroma_dir, settings.meme_collection)
+    )
+
+    if settings.local_retrieval_model_path:
+        embeddings = embed_passages_with_local_model([record.summary for record in records], settings)
+    else:
+        client = build_openai_client(settings)
+        embeddings = embed_texts(client, settings.openai_embedding_model, [record.summary for record in records])
     
     metadatas = []
     ids = []

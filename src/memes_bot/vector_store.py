@@ -8,3 +8,12 @@ from pathlib import Path
 def get_collection(chroma_dir: Path, collection_name: str) -> Collection:
     client = chromadb.PersistentClient(path=str(chroma_dir))
     return client.get_or_create_collection(name=collection_name)
+
+
+def reset_collection(chroma_dir: Path, collection_name: str) -> Collection:
+    client = chromadb.PersistentClient(path=str(chroma_dir))
+    try:
+        client.delete_collection(name=collection_name)
+    except Exception:
+        pass
+    return client.get_or_create_collection(name=collection_name)
