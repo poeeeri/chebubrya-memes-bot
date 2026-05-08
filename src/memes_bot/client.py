@@ -28,9 +28,9 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
         candidates_lines.append(
             '\n'.join(
                 [
-                    f'{idx}. id: {candidate['id']}',
-                    f'image_path: {candidate['image_path']}',
-                    f'distance_score: {candidate.get('distance', 'n/a')}',
+                    f"{idx}. id: {candidate['id']}",
+                    f"image_path: {candidate['image_path']}",
+                    f"distance_score: {candidate.get('distance', 'n/a')}",
                 ],
             )
         )

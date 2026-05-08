@@ -29,6 +29,7 @@ class Settings:
     local_reranker_model_path: str = ""
     local_retrieval_model_path: str = ""
     local_retrieval_use_e5_prefixes: bool = True
+    database_url: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -56,4 +57,5 @@ class Settings:
             local_retrieval_use_e5_prefixes=os.getenv(
                 "LOCAL_RETRIEVAL_USE_E5_PREFIXES", 
                 "true").strip().lower() in {"1", "true", "yes", "y"},
+            database_url=os.getenv("DATABASE_URL", "").strip(),
         )
