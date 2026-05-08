@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import json
+from dataclasses import replace
 from memes_bot.config import Settings
 import pandas as pd
 from pathlib import Path
@@ -14,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--query-columns', required=True, nargs='+')
     parser.add_argument('--id-column', default='meme_id')
     parser.add_argument('--split', default='')
-    parser.add_argument('---retrieve-k', type=int, default=5)
+    parser.add_argument('--retrieve-k', type=int, default=5)
     parser.add_argument("--top-k", type=int, nargs="+", default=[1, 3, 5])
     parser.add_argument('--show-failure', type=int, default=20)
     return parser.parse_args()
@@ -68,7 +69,7 @@ def find_rank(candidate_ids: list[str], target_id: str) -> int | None:
 
 def main() -> None:
     args = parse_args()
-    settings = Settings.from_env()
+    settings = replace(Settings.from_env(), retrieval_top_k=args.retrieve_k)
     df = load_dataframe(Path(args.dataset))
     if args.split:
         df = df[df["split"].astype(str).str.lower() == args.split.lower()].copy()
