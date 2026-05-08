@@ -45,11 +45,18 @@ def retrieve_candidates(query: str, settings: Settings) -> list[dict]:
 
 
 def pick_best_meme(query: str, settings: Settings) -> dict:
+    selected, _ = pick_best_meme_with_candidates(query, settings)
+    return selected
+
+
+def pick_best_meme_with_candidates(query: str, settings: Settings) -> tuple[dict, list[dict]]:
     candidates = retrieve_candidates(query, settings)
+    if not candidates:
+        raise RuntimeError("No meme candidates found.")
 
     if settings.local_reranker_model_path:
         reranked_candidates = rerank_candidates_with_local_reranker(query, candidates, settings)
-        return reranked_candidates[0]
+        return reranked_candidates[0], reranked_candidates
 
     client = build_openai_client(settings)
     choice = choose_best_meme(
@@ -63,6 +70,6 @@ def pick_best_meme(query: str, settings: Settings) -> dict:
 
     for candidate in candidates:
         if candidate["id"] == chosen_id:
-            return candidate
+            return candidate, candidates
 
-    return candidates[0]
+    return candidates[0], candidates
