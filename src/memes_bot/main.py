@@ -18,15 +18,20 @@ async def run() -> None:
             "TELEGRAM_BOT_TOKEN is not set"
         )
 
-    dp = create_dispatcher(settings)
     retry_delay = settings.telegram_retry_delay_seconds
 
     while True:
         session = AiohttpSession(timeout=settings.telegram_request_timeout_seconds)
         bot = Bot(token=settings.telegram_bot_token, session=session)
         try:
+            me = await bot.get_me()
+            if not me.username:
+                raise RuntimeError("Telegram bot username is empty")
+
+            dp = create_dispatcher(settings, me.username)
             logging.info(
-                "Starting Telegram polling with request timeout=%ss",
+                "Starting Telegram polling for @%s with request timeout=%ss",
+                me.username,
                 settings.telegram_request_timeout_seconds,
             )
             await dp.start_polling(bot)
