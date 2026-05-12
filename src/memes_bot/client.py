@@ -7,10 +7,12 @@ import json
 
 def build_openai_client(settings: Settings) -> OpenAI:
     headers = {}
-    # openriuter
+    # openrouter
     headers['HTTP-Referer'] = settings.openrouter_site_url
     headers['X-OpenRouter-Title'] = settings.openrouter_site_name
     kwargs = {'api_key': settings.openai_api_key}
+    if settings.openai_base_url:
+        kwargs['base_url'] = settings.openai_base_url
     kwargs['default_headers'] = headers
     return OpenAI(**kwargs)
 
