@@ -1,17 +1,28 @@
 from __future__ import annotations
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 import pandas as pd
+from memes_bot.client import build_openai_client, embed_texts
 from memes_bot.config import Settings
+from memes_bot.local_retrieval import embed_queries_with_local_model
 from memes_bot.retriever import pick_best_meme_with_candidates, retrieve_candidates
 from memes_bot.reranker import rerank_candidates_with_local_reranker
+from memes_bot.vector_store import get_collection
 
 
 EvalItem = dict[str, str]
 Ranker = Callable[[str], list[str]]
+
+
+@dataclass(frozen=True)
+class RetrievalConfig:
+    name: str
+    retrieval_backend: str
+    rerank_backend: str
+    collection: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,10 +36,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--modes",
         nargs="+",
-        default=["baseline", "local", "local-rerank", "llm-rerank"],
-        choices=["baseline", "local", "local-rerank", "llm-rerank"],
+        default=["api-api", "api-local", "local-api", "local-local"],
+        choices=[
+            "api-api",
+            "api-local",
+            "local-api",
+            "local-local",
+            "api",
+            "local",
+            "baseline",
+            "local-rerank",
+            "llm-rerank",
+        ],
     )
     parser.add_argument("--baseline-collection", default="")
+    parser.add_argument("--api-collection", default="")
     parser.add_argument("--local-collection", default="")
     parser.add_argument("--show-failures", type=int, default=0)
     return parser.parse_args()
@@ -140,73 +162,104 @@ def evaluate_mode(
     }
 
 
-def make_rankers(args: argparse.Namespace, base_settings: Settings) -> dict[str, Ranker]:
-    baseline_collection = args.baseline_collection or base_settings.meme_collection
-    local_collection = args.local_collection or base_settings.meme_collection
-    rankers: dict[str, Ranker] = {}
+def normalize_modes(modes: list[str]) -> list[str]:
+    aliases = {
+        "baseline": "api",
+        "llm-rerank": "local-api",
+        "local-rerank": "local-local",
+    }
+    normalized: list[str] = []
+    for mode in modes:
+        resolved = aliases.get(mode, mode)
+        if resolved not in normalized:
+            normalized.append(resolved)
+    return normalized
 
-    if "baseline" in args.modes:
-        settings = replace(
-            base_settings,
-            retrieval_top_k=args.retrieve_k,
-            meme_collection=baseline_collection,
-            local_retrieval_model_path="",
-            local_reranker_model_path="",
-        )
 
-        def baseline_ranker(query: str, settings: Settings = settings) -> list[str]:
-            return [candidate["id"] for candidate in retrieve_candidates(query, settings)]
+def build_retrieval_configs(
+    modes: list[str],
+    base_settings: Settings,
+    api_collection: str,
+    local_collection: str,
+) -> list[RetrievalConfig]:
+    api_collection = api_collection or base_settings.meme_collection
+    local_collection = local_collection or base_settings.meme_collection
 
-        rankers["baseline"] = baseline_ranker
+    available = {
+        "api": RetrievalConfig(
+            name="api",
+            retrieval_backend="api",
+            rerank_backend="none",
+            collection=api_collection,
+        ),
+        "local": RetrievalConfig(
+            name="local",
+            retrieval_backend="local",
+            rerank_backend="none",
+            collection=local_collection,
+        ),
+        "api-api": RetrievalConfig(
+            name="api-api",
+            retrieval_backend="api",
+            rerank_backend="api",
+            collection=api_collection,
+        ),
+        "api-local": RetrievalConfig(
+            name="api-local",
+            retrieval_backend="api",
+            rerank_backend="local",
+            collection=api_collection,
+        ),
+        "local-api": RetrievalConfig(
+            name="local-api",
+            retrieval_backend="local",
+            rerank_backend="api",
+            collection=local_collection,
+        ),
+        "local-local": RetrievalConfig(
+            name="local-local",
+            retrieval_backend="local",
+            rerank_backend="local",
+            collection=local_collection,
+        ),
+    }
+    return [available[mode] for mode in normalize_modes(modes)]
 
-    if "local" in args.modes:
+
+def make_ranker(
+    config: RetrievalConfig,
+    base_settings: Settings,
+    retrieve_k: int,
+) -> Ranker:
+    if config.retrieval_backend == "local":
         _require_setting(
             base_settings.local_retrieval_model_path,
-            "LOCAL_RETRIEVAL_MODEL_PATH is required for mode 'local'.",
+            f"LOCAL_RETRIEVAL_MODEL_PATH is required for mode '{config.name}'.",
         )
-        settings = replace(
-            base_settings,
-            retrieval_top_k=args.retrieve_k,
-            meme_collection=local_collection,
-            local_reranker_model_path="",
-        )
+        local_retrieval_model_path = base_settings.local_retrieval_model_path
+    else:
+        local_retrieval_model_path = ""
 
-        def local_ranker(query: str, settings: Settings = settings) -> list[str]:
-            return [candidate["id"] for candidate in retrieve_candidates(query, settings)]
-
-        rankers["local"] = local_ranker
-
-    if "local-rerank" in args.modes:
-        _require_setting(
-            base_settings.local_retrieval_model_path,
-            "LOCAL_RETRIEVAL_MODEL_PATH is required for mode 'local-rerank'.",
-        )
+    if config.rerank_backend == "local":
         _require_setting(
             base_settings.local_reranker_model_path,
-            "LOCAL_RERANKER_MODEL_PATH is required for mode 'local-rerank'.",
+            f"LOCAL_RERANKER_MODEL_PATH is required for mode '{config.name}'.",
         )
-        settings = replace(
-            base_settings,
-            retrieval_top_k=args.retrieve_k,
-            meme_collection=local_collection,
-        )
+        local_reranker_model_path = base_settings.local_reranker_model_path
+    else:
+        local_reranker_model_path = ""
 
-        def local_rerank_ranker(query: str, settings: Settings = settings) -> list[str]:
-            candidates = retrieve_candidates(query, settings)
-            reranked = rerank_candidates_with_local_reranker(query, candidates, settings)
-            return [candidate["id"] for candidate in reranked]
+    settings = replace(
+        base_settings,
+        retrieval_top_k=retrieve_k,
+        meme_collection=config.collection,
+        local_retrieval_model_path=local_retrieval_model_path,
+        local_reranker_model_path=local_reranker_model_path,
+    )
 
-        rankers["local-rerank"] = local_rerank_ranker
+    if config.rerank_backend == "api":
 
-    if "llm-rerank" in args.modes:
-        settings = replace(
-            base_settings,
-            retrieval_top_k=args.retrieve_k,
-            meme_collection=local_collection,
-            local_reranker_model_path="",
-        )
-
-        def llm_rerank_ranker(query: str, settings: Settings = settings) -> list[str]:
+        def api_rerank_ranker(query: str, settings: Settings = settings) -> list[str]:
             selected, candidates = pick_best_meme_with_candidates(query, settings)
             selected_id = selected["id"]
             return [selected_id] + [
@@ -215,9 +268,123 @@ def make_rankers(args: argparse.Namespace, base_settings: Settings) -> dict[str,
                 if candidate["id"] != selected_id
             ]
 
-        rankers["llm-rerank"] = llm_rerank_ranker
+        return api_rerank_ranker
 
-    return rankers
+    if config.rerank_backend == "local":
+
+        def local_rerank_ranker(query: str, settings: Settings = settings) -> list[str]:
+            candidates = retrieve_candidates(query, settings)
+            reranked = rerank_candidates_with_local_reranker(query, candidates, settings)
+            return [candidate["id"] for candidate in reranked]
+
+        return local_rerank_ranker
+
+    def retrieval_ranker(query: str, settings: Settings = settings) -> list[str]:
+        return [candidate["id"] for candidate in retrieve_candidates(query, settings)]
+
+    return retrieval_ranker
+
+
+def make_rankers(args: argparse.Namespace, base_settings: Settings) -> dict[str, Ranker]:
+    api_collection = (
+        args.api_collection
+        or args.baseline_collection
+        or base_settings.meme_collection
+    )
+    configs = build_retrieval_configs(
+        modes=args.modes,
+        base_settings=base_settings,
+        api_collection=api_collection,
+        local_collection=args.local_collection,
+    )
+    return {
+        config.name: make_ranker(config, base_settings, args.retrieve_k)
+        for config in configs
+    }
+
+
+def compare_model_metrics(
+    queries: list[EvalItem],
+    settings: Settings,
+    top_k: list[int],
+    retrieve_k: int,
+    modes: list[str] | None = None,
+    api_collection: str = "",
+    local_collection: str = "",
+) -> list[dict]:
+    configs = build_retrieval_configs(
+        modes=modes or ["api-api", "api-local", "local-api", "local-local"],
+        base_settings=settings,
+        api_collection=api_collection,
+        local_collection=local_collection,
+    )
+    validate_collections(configs, settings, queries[0]["query"])
+    return [
+        evaluate_mode(
+            name=config.name,
+            ranker=make_ranker(config, settings, retrieve_k),
+            queries=queries,
+            top_k=top_k,
+        )
+        for config in configs
+    ]
+
+
+def validate_collections(
+    configs: list[RetrievalConfig],
+    settings: Settings,
+    sample_query: str,
+) -> None:
+    checked: set[str] = set()
+    for config in configs:
+        check_key = f"{config.retrieval_backend}:{config.collection}"
+        if check_key in checked:
+            continue
+        checked.add(check_key)
+        collection = get_collection(settings.chroma_dir, config.collection)
+        count = collection.count()
+        if count == 0:
+            raise RuntimeError(
+                "Chroma collection "
+                f"'{config.collection}' is empty. Reindex it before comparing "
+                f"mode '{config.name}'."
+            )
+        expected_dim = get_query_embedding_dimension(
+            backend=config.retrieval_backend,
+            settings=settings,
+            sample_query=sample_query,
+        )
+        actual_dim = get_collection_embedding_dimension(collection)
+        if actual_dim != expected_dim:
+            raise RuntimeError(
+                f"Chroma collection '{config.collection}' has {actual_dim}-dim "
+                f"embeddings, but mode '{config.name}' uses "
+                f"{config.retrieval_backend} retrieval with {expected_dim}-dim "
+                "query embeddings. Reindex this collection with the same "
+                "embedding backend used by the mode."
+            )
+
+
+def get_query_embedding_dimension(
+    backend: str,
+    settings: Settings,
+    sample_query: str,
+) -> int:
+    if backend == "local":
+        embedding = embed_queries_with_local_model([sample_query], settings)[0]
+        return len(embedding)
+
+    client = build_openai_client(settings)
+    embedding = embed_texts(client, settings.openai_embedding_model, [sample_query])[0]
+    return len(embedding)
+
+
+def get_collection_embedding_dimension(collection: object) -> int:
+    data = collection.get(limit=1, include=["embeddings"])
+    embeddings = data.get("embeddings")
+    if embeddings is None or len(embeddings) == 0:
+        raise RuntimeError(f"Could not read embeddings from '{collection.name}'.")
+    return len(embeddings[0])
 
 
 def _require_setting(value: str, message: str) -> None:
@@ -274,11 +441,20 @@ def main() -> None:
         raise RuntimeError("No evaluation queries found.")
 
     top_k = sorted(args.top_k)
-    rankers = make_rankers(args, settings)
-    results = [
-        evaluate_mode(name, ranker, queries, top_k)
-        for name, ranker in rankers.items()
-    ]
+    api_collection = (
+        args.api_collection
+        or args.baseline_collection
+        or settings.meme_collection
+    )
+    results = compare_model_metrics(
+        queries=queries,
+        settings=settings,
+        top_k=top_k,
+        retrieve_k=args.retrieve_k,
+        modes=args.modes,
+        api_collection=api_collection,
+        local_collection=args.local_collection,
+    )
 
     print_results(results, top_k)
     print_failures(results, args.show_failures)

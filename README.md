@@ -163,29 +163,7 @@ Linux/bash:
 PYTHONPATH=src python -m memes_bot.main
 ```
 
-## Оценка качества
-
-Оценить retrieval:
-
-```bash
-python src\scripts\evaluate_retrieval.py `
-  --dataset "путь\dataset\val_check_1.csv" `
-  --query-columns "user_messages" `
-  --top-k 1 3 5 `
-  --retrieve-k 20
-```
-
-Оценить retrieval + local reranker:
-
-```bash
-python src\scripts\evaluate_retrieval_rerank.py `
-  --dataset "путь\dataset\val_check_1.csv" `
-  --query-columns "user_messages" `
-  --top-k 1 3 5 `
-  --retrieve-k 20
-```
-
-## Честное сравнение baseline, local и rerank
+## сравнение baseline, local и rerank
 
 Для честного сравнения OpenAI retrieval и local retrieval нужны разные Chroma-коллекции
 
@@ -197,17 +175,25 @@ python src\scripts\evaluate_retrieval_rerank.py `
 Индексация OpenAI baseline:
 
 ```powershell
-$env:LOCAL_RETRIEVAL_MODEL_PATH=""
-$env:MEME_COLLECTION="memes_openai"
-python src\scripts\index_memes.py --dataset "путь\dataset\check_1.csv" --image-column "image_path" --text-columns "embedding_text" "ocr_text" "semantic_description" --reset
+python src\scripts\index_memes.py `
+  --dataset "путь\dataset\check_1.csv" `
+  --image-column "image_path" `
+  --text-columns "embedding_text" "ocr_text" "semantic_description" `
+  --collection memes_openai `
+  --embedding-backend api `
+  --reset
 ```
 
 Индексация local retrieval:
 
 ```powershell
-$env:LOCAL_RETRIEVAL_MODEL_PATH="путь\chebubrya-memes-bot\finetuned_retrieval_model\e5_embedding_plus_ocr\e5_embedding_plus_ocr_lr2e5_e2"
-$env:MEME_COLLECTION="memes_local"
-python src\scripts\index_memes.py --dataset "путь\dataset\check_1.csv" --image-column "image_path" --text-columns "embedding_text" "ocr_text" "semantic_description" --reset
+python src\scripts\index_memes.py `
+  --dataset "путь\dataset\check_1.csv" `
+  --image-column "image_path" `
+  --text-columns "embedding_text" "ocr_text" "semantic_description" `
+  --collection memes_local `
+  --embedding-backend local `
+  --reset
 ```
 
 Сравнение:
@@ -216,23 +202,30 @@ python src\scripts\index_memes.py --dataset "путь\dataset\check_1.csv" --ima
 python src\scripts\compare_retrieval_configs.py `
   --dataset "путь\dataset\val_check_1.csv" `
   --query-columns "user_messages" `
-  --baseline-collection memes_openai `
+  --api-collection memes_openai `
   --local-collection memes_local `
   --top-k 1 3 5 `
-  --retrieve-k 20 `
-  --modes baseline local local-rerank llm-rerank
+  --retrieve-k 20
 ```
 
-Пример вывода:
+Результаты на `val_check_1.csv`, 270 запросов:
 
 ```text
-mode         | queries | errors | Recall@1 | Recall@3 | Recall@5 | MRR
--------------+---------+--------+----------+----------+----------+-------
-baseline     | 270     | 0      | ...      | ...      | ...      | ...
-local        | 270     | 0      | ...      | ...      | ...      | ...
-local-rerank | 270     | 0      | ...      | ...      | ...      | ...
-llm-rerank   | 270     | 0      | ...      | ...      | ...      | ...
+mode        | queries | errors | Recall@1 | Recall@3 | Recall@5 | MRR
+------------+---------+--------+----------+----------+----------+-------
+local       | 270     | 0      | 0.4074   | 0.6222   | 0.7074   | 0.5464
+local-local | 270     | 0      | 0.4444   | 0.6519   | 0.7296   | 0.5734
 ```
+
+```text
+mode      | queries | errors | Recall@1 | Recall@3 | Recall@5 | MRR
+----------+---------+--------+----------+----------+----------+-------
+api-api   | 270     | 0      | 0.2926   | 0.4630   | 0.5630   | 0.4136
+api-local | 270     | 1      | 0.4222   | 0.6407   | 0.7000   | 0.5468
+local-api | 270     | 1      | 0.4074   | 0.6222   | 0.7074   | 0.5458
+```
+
+Лучшее качество в текущем сравнении дает `local-local`: локальная retrieval-модель плюс локальный reranker. `api-local` близок по MRR и Recall@1, но зависит от API.
 
 ## Feedback и PostgreSQL
 
