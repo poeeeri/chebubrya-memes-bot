@@ -5,7 +5,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 import pandas as pd
+from memes_bot.client import build_openai_client, embed_texts
 from memes_bot.config import Settings
+from memes_bot.local_retrieval import embed_queries_with_local_model
 from memes_bot.retriever import pick_best_meme_with_candidates, retrieve_candidates
 from memes_bot.reranker import rerank_candidates_with_local_reranker
 from memes_bot.vector_store import get_collection
@@ -316,7 +318,7 @@ def compare_model_metrics(
         api_collection=api_collection,
         local_collection=local_collection,
     )
-    validate_collections(configs, settings)
+    validate_collections(configs, settings, queries[0]["query"])
     return [
         evaluate_mode(
             name=config.name,
@@ -328,12 +330,17 @@ def compare_model_metrics(
     ]
 
 
-def validate_collections(configs: list[RetrievalConfig], settings: Settings) -> None:
+def validate_collections(
+    configs: list[RetrievalConfig],
+    settings: Settings,
+    sample_query: str,
+) -> None:
     checked: set[str] = set()
     for config in configs:
-        if config.collection in checked:
+        check_key = f"{config.retrieval_backend}:{config.collection}"
+        if check_key in checked:
             continue
-        checked.add(config.collection)
+        checked.add(check_key)
         collection = get_collection(settings.chroma_dir, config.collection)
         count = collection.count()
         if count == 0:
@@ -342,6 +349,42 @@ def validate_collections(configs: list[RetrievalConfig], settings: Settings) -> 
                 f"'{config.collection}' is empty. Reindex it before comparing "
                 f"mode '{config.name}'."
             )
+        expected_dim = get_query_embedding_dimension(
+            backend=config.retrieval_backend,
+            settings=settings,
+            sample_query=sample_query,
+        )
+        actual_dim = get_collection_embedding_dimension(collection)
+        if actual_dim != expected_dim:
+            raise RuntimeError(
+                f"Chroma collection '{config.collection}' has {actual_dim}-dim "
+                f"embeddings, but mode '{config.name}' uses "
+                f"{config.retrieval_backend} retrieval with {expected_dim}-dim "
+                "query embeddings. Reindex this collection with the same "
+                "embedding backend used by the mode."
+            )
+
+
+def get_query_embedding_dimension(
+    backend: str,
+    settings: Settings,
+    sample_query: str,
+) -> int:
+    if backend == "local":
+        embedding = embed_queries_with_local_model([sample_query], settings)[0]
+        return len(embedding)
+
+    client = build_openai_client(settings)
+    embedding = embed_texts(client, settings.openai_embedding_model, [sample_query])[0]
+    return len(embedding)
+
+
+def get_collection_embedding_dimension(collection: object) -> int:
+    data = collection.get(limit=1, include=["embeddings"])
+    embeddings = data.get("embeddings")
+    if embeddings is None or len(embeddings) == 0:
+        raise RuntimeError(f"Could not read embeddings from '{collection.name}'.")
+    return len(embeddings[0])
 
 
 def _require_setting(value: str, message: str) -> None:
