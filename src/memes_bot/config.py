@@ -22,7 +22,6 @@ class Settings:
     chroma_dir: Path = ROOT_DIR / "storage" / "chroma"
     meme_collection: str = "memes"
     retrieval_top_k: int = 5
-    # настройка таймаутов и ретраев для телеграм апи
     telegram_request_timeout_seconds: float = 120.0
     telegram_retry_delay_seconds: float = 5.0
     telegram_retry_delay_max_seconds: float = 60.0
