@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 from .client import build_openai_client, choose_best_meme, embed_texts
 from .config import Settings
@@ -49,6 +50,7 @@ def pick_best_meme(query: str, settings: Settings) -> dict:
     return selected
 
 
+# оставлен для cli скриптов
 def pick_best_meme_with_candidates(query: str, settings: Settings) -> tuple[dict, list[dict]]:
     candidates = retrieve_candidates(query, settings)
     if not candidates:
@@ -73,3 +75,10 @@ def pick_best_meme_with_candidates(query: str, settings: Settings) -> tuple[dict
             return candidate, candidates
 
     return candidates[0], candidates
+
+
+async def pick_best_meme_with_candidates_async(
+    query: str,
+    settings: Settings,
+) -> tuple[dict, list[dict]]:
+    return await asyncio.to_thread(pick_best_meme_with_candidates, query, settings)
