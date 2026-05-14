@@ -24,7 +24,7 @@ from .database import (
     log_meme_request,
     update_response_message_id,
 )
-from .retriever import pick_best_meme_with_candidates
+from .retriever import pick_best_meme_with_candidates_async
 
 
 def create_dispatcher(settings: Settings, bot_username: str) -> Dispatcher:
@@ -125,7 +125,7 @@ def _extract_reply_text(message: Message) -> str:
 
 async def _reply_with_meme(message: Message, query: str, settings: Settings) -> None:
     try:
-        match, candidates = pick_best_meme_with_candidates(query, settings)
+        match, candidates = await pick_best_meme_with_candidates_async(query, settings)
         request_id = await _log_success(message, query, match, candidates)
 
         image_path = Path(match["image_path"])
