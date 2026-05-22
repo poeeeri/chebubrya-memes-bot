@@ -33,6 +33,9 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
                     f"{idx}. id: {candidate['id']}",
                     f"image_path: {candidate['image_path']}",
                     f"distance_score: {candidate.get('distance', 'n/a')}",
+                    f"embedding_text: {candidate["embedding_text"]}",
+                    f"ocr_text: {candidate["ocr_text"]}",
+                    f"semantic_description: {candidate["semantic_description"]}",
                 ],
             )
         )
