@@ -19,6 +19,7 @@ class Settings:
     openrouter_site_name: str = ""
     openai_embedding_model: str = "openai/text-embedding-3-small"
     openai_rerank_model: str = "openai/gpt-5-mini"
+    openai_timeout_seconds: float = 60.0
     chroma_dir: Path = ROOT_DIR / "storage" / "chroma"
     meme_collection: str = "memes"
     retrieval_top_k: int = 5
@@ -45,6 +46,7 @@ class Settings:
             openrouter_site_name=os.getenv('OPENROUTER_SITE_NAME', '').strip(),
             openai_embedding_model=os.getenv('OPENAI_EMBEDDING_MODEL', 'openai/text-embedding-3-small').strip(),
             openai_rerank_model=os.getenv('OPENAI_RERANK_MODEL', 'openai/gpt-5-mini').strip(),
+            openai_timeout_seconds=float(os.getenv('OPENAI_TIMEOUT_SECONDS', 60.0)),
             chroma_dir=chroma_dir_path,
             meme_collection=os.getenv('MEME_COLLECTION', 'memes'),
             retrieval_top_k=int(os.getenv('RETRIEVAL_TOP_K', 5)),
