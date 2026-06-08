@@ -101,6 +101,75 @@ async def log_meme_request(
     return request_id
 
 
+async def log_next_meme_request_once(
+    *,
+    previous_request_id: str,
+    chat_id: int,
+    user_id: int | None,
+    request_message_id: int | None,
+    query: str,
+    selected_meme: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> str | None:
+    if _pool is None:
+        return None
+
+    request_id = str(uuid4())
+    async with _pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "select pg_advisory_xact_lock(hashtext($1), 0)",
+                previous_request_id,
+            )
+            already_requested = await conn.fetchval(
+                """
+                select true
+                from meme_feedback
+                where request_id = $1::uuid
+                    and feedback = 'more'
+                limit 1
+                """,
+                previous_request_id,
+            )
+            if already_requested:
+                return None
+
+            await conn.execute(
+                """
+                insert into meme_feedback (request_id, telegram_user_id, feedback)
+                values ($1::uuid, $2, 'more')
+                """,
+                previous_request_id,
+                user_id,
+            )
+            await conn.execute(
+                """
+                insert into meme_requests (
+                    id,
+                    telegram_chat_id,
+                    telegram_user_id,
+                    request_message_id,
+                    query,
+                    selected_meme_id,
+                    selected_image_path,
+                    candidates,
+                    status
+                )
+                values ($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb, 'served')
+                """,
+                request_id,
+                chat_id,
+                user_id,
+                request_message_id,
+                query,
+                str(selected_meme.get("id", "")),
+                str(selected_meme.get("image_path", "")),
+                _json_dumps(candidates),
+            )
+
+    return request_id
+
+
 async def update_response_message_id(request_id: str | None, response_message_id: int) -> None:
     if _pool is None or not request_id:
         return
@@ -154,9 +223,42 @@ async def log_feedback(
     request_id: str,
     user_id: int | None,
     feedback: str,
-) -> None:
+) -> bool:
     if _pool is None:
-        return
+        return False
+
+    if feedback == "like" and user_id is not None:
+        async with _pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "select pg_advisory_xact_lock(hashtext($1), $2)",
+                    f"{request_id}:like",
+                    user_id,
+                )
+                already_liked = await conn.fetchval(
+                    """
+                    select true
+                    from meme_feedback
+                    where request_id = $1::uuid
+                        and telegram_user_id = $2
+                        and feedback = 'like'
+                    limit 1
+                    """,
+                    request_id,
+                    user_id,
+                )
+                if already_liked:
+                    return False
+
+                await conn.execute(
+                    """
+                    insert into meme_feedback (request_id, telegram_user_id, feedback)
+                    values ($1::uuid, $2, 'like')
+                    """,
+                    request_id,
+                    user_id,
+                )
+                return True
 
     await _pool.execute(
         """
@@ -167,6 +269,7 @@ async def log_feedback(
         user_id,
         feedback,
     )
+    return True
 
 
 async def get_meme_request(request_id: str) -> dict[str, Any] | None:

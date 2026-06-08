@@ -10,7 +10,10 @@ def build_openai_client(settings: Settings) -> OpenAI:
     # openrouter
     headers['HTTP-Referer'] = settings.openrouter_site_url
     headers['X-OpenRouter-Title'] = settings.openrouter_site_name
-    kwargs = {'api_key': settings.openai_api_key}
+    kwargs = {
+        'api_key': settings.openai_api_key,
+        'timeout': settings.openai_timeout_seconds,
+    }
     if settings.openai_base_url:
         kwargs['base_url'] = settings.openai_base_url
     kwargs['default_headers'] = headers
@@ -33,9 +36,9 @@ def choose_best_meme(client: OpenAI, model: str, query: str, candidates: list[di
                     f"{idx}. id: {candidate['id']}",
                     f"image_path: {candidate['image_path']}",
                     f"distance_score: {candidate.get('distance', 'n/a')}",
-                    f"embedding_text: {candidate["embedding_text"]}",
-                    f"ocr_text: {candidate["ocr_text"]}",
-                    f"semantic_description: {candidate["semantic_description"]}",
+                    f"embedding_text: {candidate['embedding_text']}",
+                    f"ocr_text: {candidate['ocr_text']}",
+                    f"semantic_description: {candidate['semantic_description']}",
                 ],
             )
         )

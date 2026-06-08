@@ -22,6 +22,7 @@ from .database import (
     log_feedback,
     log_meme_error,
     log_meme_request,
+    log_next_meme_request_once,
     update_response_message_id,
 )
 from .retriever import pick_best_meme_with_candidates_async
@@ -89,13 +90,24 @@ def create_dispatcher(settings: Settings, bot_username: str) -> Dispatcher:
             return
 
         try:
-            await log_feedback(
-                request_id=request_id,
-                user_id=callback.from_user.id if callback.from_user else None,
-                feedback=feedback,
-            )
             if feedback == "more" and isinstance(callback.message, Message):
-                await _reply_with_next_candidate(callback.message, callback.from_user.id, request_id)
+                has_next = await _reply_with_next_candidate(
+                    callback.message,
+                    callback.from_user.id if callback.from_user else None,
+                    request_id,
+                )
+                if not has_next:
+                    await callback.answer("Других вариантов не осталось.")
+                    return
+            else:
+                saved = await log_feedback(
+                    request_id=request_id,
+                    user_id=callback.from_user.id if callback.from_user else None,
+                    feedback=feedback,
+                )
+                if not saved:
+                    await callback.answer("Уже сохранил.")
+                    return
         except Exception:
             logging.exception("Failed to save meme feedback: %s", callback.data)
             await callback.answer("Не смог сохранить feedback.")
@@ -129,10 +141,16 @@ async def _reply_with_meme(message: Message, query: str, settings: Settings) -> 
         request_id = await _log_success(message, query, match, candidates)
 
         image_path = Path(match["image_path"])
+        if not image_path.exists():
+            raise FileNotFoundError(f"Meme image was not found: {image_path}")
+
         photo = FSInputFile(image_path)
         sent_message = await message.reply_photo(
             photo=photo,
-            reply_markup=_feedback_keyboard(request_id) if request_id else None,
+            reply_markup=_feedback_keyboard(
+                request_id,
+                include_more=_has_next_candidate(candidates, match.get("id")),
+            ) if request_id else None,
         )
         await update_response_message_id(request_id, sent_message.message_id)
     except Exception as exc:
@@ -174,14 +192,17 @@ async def _log_error(message: Message, query: str, exc: Exception) -> None:
         logging.exception("Failed to save meme request error.")
 
 
-def _feedback_keyboard(request_id: str) -> InlineKeyboardMarkup:
+def _feedback_keyboard(request_id: str, *, include_more: bool = True) -> InlineKeyboardMarkup:
+    buttons = [
+        InlineKeyboardButton(text="👍", callback_data=f"fb:like:{request_id}"),
+        InlineKeyboardButton(text="👎", callback_data=f"fb:dislike:{request_id}"),
+    ]
+    if include_more:
+        buttons.append(InlineKeyboardButton(text="Еще", callback_data=f"fb:more:{request_id}"))
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="👍", callback_data=f"fb:like:{request_id}"),
-                InlineKeyboardButton(text="👎", callback_data=f"fb:dislike:{request_id}"),
-                InlineKeyboardButton(text="Еще", callback_data=f"fb:more:{request_id}"),
-            ]
+            buttons
         ]
     )
 
@@ -190,20 +211,23 @@ async def _reply_with_next_candidate(
     message: Message,
     user_id: int | None,
     previous_request_id: str,
-) -> None:
+) -> bool:
     request = await get_meme_request(previous_request_id)
     if not request:
-        await message.answer("Не нашел историю этого подбора.")
-        return
+        await _hide_more_button(message, previous_request_id)
+        return False
 
     candidates = _load_candidates(request.get("candidates"))
     next_candidate = _find_next_candidate(candidates, request.get("selected_meme_id"))
     if not next_candidate:
-        await message.answer("Других вариантов не осталось.")
-        return
+        await _hide_more_button(message, previous_request_id)
+        return False
+
+    await _hide_more_button(message, previous_request_id)
 
     query = str(request["query"])
-    new_request_id = await log_meme_request(
+    new_request_id = await log_next_meme_request_once(
+        previous_request_id=previous_request_id,
         chat_id=message.chat.id,
         user_id=user_id,
         request_message_id=message.message_id,
@@ -211,13 +235,23 @@ async def _reply_with_next_candidate(
         selected_meme=next_candidate,
         candidates=candidates,
     )
+    if not new_request_id:
+        return False
 
-    photo = FSInputFile(Path(next_candidate["image_path"]))
+    image_path = Path(next_candidate["image_path"])
+    if not image_path.exists():
+        raise FileNotFoundError(f"Meme image was not found: {image_path}")
+
+    photo = FSInputFile(image_path)
     sent_message = await message.answer_photo(
         photo=photo,
-        reply_markup=_feedback_keyboard(new_request_id) if new_request_id else None,
+        reply_markup=_feedback_keyboard(
+            new_request_id,
+            include_more=_has_next_candidate(candidates, next_candidate.get("id")),
+        ) if new_request_id else None,
     )
     await update_response_message_id(new_request_id, sent_message.message_id)
+    return True
 
 
 def _load_candidates(value: Any) -> list[dict]:
@@ -243,3 +277,14 @@ def _find_next_candidate(candidates: list[dict], selected_meme_id: object) -> di
             return None
 
     return candidates[0]
+
+
+def _has_next_candidate(candidates: list[dict], selected_meme_id: object) -> bool:
+    return _find_next_candidate(candidates, selected_meme_id) is not None
+
+
+async def _hide_more_button(message: Message, request_id: str) -> None:
+    try:
+        await message.edit_reply_markup(reply_markup=_feedback_keyboard(request_id, include_more=False))
+    except Exception:
+        logging.exception("Failed to hide more button for request: %s", request_id)
