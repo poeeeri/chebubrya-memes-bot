@@ -1,0 +1,58 @@
+name: security
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    sast:
+        name: SAST Bandit
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                python-version: "3.12"
+            - name: Install Bandit
+              run: python -m pip install bandit==1.9.4
+            - name: Run Bandit
+              run: |
+                mkdir -p security-reports
+                bandit -r src -c bandit.yaml -f json -o security-reports/bandit-report.json
+                bandit -r src -c bandit.yaml -f txt -o security-reports/bandit-report.txt
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                name: bandit-report
+                path: security-reports/bandit-report.*
+
+    sca:
+        name: SCA pip-audit
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                python-version: "3.12"
+            - name: Install pip-audit
+              run: python -m pip install pip-audit==2.10.0
+            - name: Run pip-audit
+              run: |
+                mkdir -p security-reports
+                # - aiohttp 3.14.x is blocked by aiogram's aiohttp<3.14 constraint.
+                # - chromadb CVE has no fixed version in the advisory/report.
+                pip-audit -r requirements.txt \
+                  --ignore-vuln CVE-2026-34993 \
+                  --ignore-vuln CVE-2026-47265 \
+                  --ignore-vuln CVE-2026-45829 \
+                  -f json -o security-reports/pip-audit-report.json
+                pip-audit -r requirements.txt \
+                  --ignore-vuln CVE-2026-34993 \
+                  --ignore-vuln CVE-2026-47265 \
+                  --ignore-vuln CVE-2026-45829 \
+                  -f columns -o security-reports/pip-audit-report.txt
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                name: pip-audit-report
+                path: security-reports/pip-audit-report.*

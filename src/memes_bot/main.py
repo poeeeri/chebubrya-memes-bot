@@ -19,7 +19,7 @@ async def run() -> None:
             "TELEGRAM_BOT_TOKEN is not set"
         )
 
-    await init_database(settings)
+    await _init_database_with_retry(settings)
 
     try:
         retry_delay = settings.telegram_retry_delay_seconds
@@ -57,6 +57,26 @@ async def run() -> None:
                 await bot.session.close()
     finally:
         await close_database()
+
+
+async def _init_database_with_retry(settings: Settings) -> None:
+    retry_delay = settings.telegram_retry_delay_seconds
+    while True:
+        try:
+            await init_database(settings)
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception(
+                "Database initialization failed. Retrying in %.1f seconds.",
+                retry_delay,
+            )
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(
+                retry_delay * 2,
+                settings.telegram_retry_delay_max_seconds,
+            )
 
 
 if __name__ == "__main__":

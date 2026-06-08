@@ -5,6 +5,7 @@
 __pycache__/
 .pytest_cache/
 .mypy_cache/
+.pip-audit-cache/
 .env
 data/
 storage/
@@ -15,3 +16,4 @@ storage/
 /finetuned_model
 /finetuned_retrieval_model
 LOCAL.md
+security-reports
