@@ -41,9 +41,12 @@ Run OWASP ZAP Baseline Scan from another terminal:
 ```powershell
 docker run --rm `
   --network host `
-  -v "${PWD}\security-reports:/zap/wrk/:rw" `
+  -v "${PWD}:/zap/wrk/:rw" `
   ghcr.io/zaproxy/zaproxy:stable `
-  zap-baseline.py -t http://127.0.0.1:8080 -r zap-report.html -J zap-report.json
+  zap-baseline.py -t http://127.0.0.1:8080 `
+  -c src/security_lab/zap-baseline.conf `
+  -r security-reports/zap-report.html `
+  -J security-reports/zap-report.json
 ```
 
 If Docker Desktop on Windows does not support `--network host`, expose the target on all interfaces and scan `host.docker.internal`:
@@ -55,9 +58,12 @@ python -m security_lab.dast_target --host 0.0.0.0 --port 8080
 
 ```powershell
 docker run --rm `
-  -v "${PWD}\security-reports:/zap/wrk/:rw" `
+  -v "${PWD}:/zap/wrk/:rw" `
   ghcr.io/zaproxy/zaproxy:stable `
-  zap-baseline.py -t http://host.docker.internal:8080 -r zap-report.html -J zap-report.json
+  zap-baseline.py -t http://host.docker.internal:8080 `
+  -c src/security_lab/zap-baseline.conf `
+  -r security-reports/zap-report.html `
+  -J security-reports/zap-report.json
 ```
 
 To prove that the scanner reacts to weaknesses, run the intentionally weak mode:
@@ -67,7 +73,19 @@ $env:PYTHONPATH="src"
 python -m security_lab.dast_target --host 0.0.0.0 --port 8080 --vulnerable
 ```
 
-Then scan `http://host.docker.internal:8080/echo?q=<script>alert(1)</script>`. The hardened mode sends security headers such as CSP, `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy`.
+Then scan with rules promoted to `FAIL`:
+
+```powershell
+docker run --rm `
+  -v "${PWD}:/zap/wrk/:rw" `
+  ghcr.io/zaproxy/zaproxy:stable `
+  zap-baseline.py -t http://host.docker.internal:8080 `
+  -c src/security_lab/zap-vulnerable.conf `
+  -r security-reports/zap-vulnerable-report.html `
+  -J security-reports/zap-vulnerable-report.json
+```
+
+In vulnerable mode the target intentionally removes hardening headers, reflects `/echo` input without escaping and leaks a verbose `Server` header. This should produce `FAIL-NEW` findings in the ZAP output. The hardened mode sends security headers such as CSP, `Permissions-Policy`, COEP/COOP/CORP, `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy`.
 
 ## SCA
 
